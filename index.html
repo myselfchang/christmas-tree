@@ -174,13 +174,14 @@
                 champagneGold: 0xd4af37, 
                 nebulaGold: 0xffeebb,    
                 deepGreen: 0x0f4d19,     
-                accentRed: 0xbb0a1e,     
-                starGlow: 0xffe680
+                accentRed: 0xd6001c,     // Christmas Red
+                starGlow: 0xffd700       // Gold
             },
             particles: {
-                count: 1500,      
-                nebulaCount: 800, // Background stars
+                count: 800,       
+                nebulaCount: 800, 
                 dustCount: 1500, 
+                magicCount: 3000, 
                 treeHeight: 22,   
                 treeRadius: 10.5  
             },
@@ -199,7 +200,7 @@
         };
 
         let scene, camera, renderer, composer;
-        let mainGroup, bgGroup; // Separated groups
+        let mainGroup, bgGroup; 
         let clock = new THREE.Clock();
         let particleSystem = []; 
         let photoMeshGroup = new THREE.Group();
@@ -207,28 +208,25 @@
         let caneTexture; 
 
         async function init() {
-            // 1. Initialize 3D Scene
             initThree();
             setupEnvironment(); 
             setupLights();
             createTextures();
             createParticles(); 
-            createNebula(); // Background
+            createMagicDust(); 
+            createNebula(); 
             createDust();     
             setupPostProcessing();
             setupEvents();
             
-            // 2. Start Animation Loop
             animate();
 
-            // 3. Remove Loader
             const loader = document.getElementById('loader');
             if (loader) {
                 loader.style.opacity = 0;
                 setTimeout(() => loader.remove(), 800);
             }
 
-            // 4. Initialize AI/Camera (Async, Non-blocking)
             initMediaPipe().catch(err => {
                 console.warn("Camera initialization failed or was denied:", err);
             });
@@ -240,7 +238,6 @@
             scene.background = new THREE.Color(CONFIG.colors.bg);
             scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.015); 
 
-            // Smart Camera Positioning
             const aspect = window.innerWidth / window.innerHeight;
             let camZ = CONFIG.camera.z;
             if (aspect < 0.8) {
@@ -257,11 +254,10 @@
             renderer.toneMappingExposure = 2.0; 
             container.appendChild(renderer.domElement);
 
-            // Two separate groups
-            bgGroup = new THREE.Group(); // Background stars (static rotation)
+            bgGroup = new THREE.Group(); 
             scene.add(bgGroup);
 
-            mainGroup = new THREE.Group(); // Tree (interactive rotation)
+            mainGroup = new THREE.Group(); 
             scene.add(mainGroup);
         }
 
@@ -271,24 +267,24 @@
         }
 
         function setupLights() {
-            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.5); 
             scene.add(ambient);
 
             const innerLight = new THREE.PointLight(0xffaa00, 3, 25);
             innerLight.position.set(0, 5, 0);
             mainGroup.add(innerLight);
 
-            const spotGold = new THREE.SpotLight(0xffcc66, 1500);
+            const spotGold = new THREE.SpotLight(0xffcc66, 2000); 
             spotGold.position.set(30, 40, 40);
             spotGold.angle = 0.5;
             spotGold.penumbra = 0.5;
             scene.add(spotGold);
 
-            const redSide = new THREE.PointLight(0xff0000, 2, 50);
+            const redSide = new THREE.PointLight(0xff0000, 3, 50); 
             redSide.position.set(-30, 10, -10);
             scene.add(redSide);
 
-            const fill = new THREE.DirectionalLight(0xffeebb, 0.5);
+            const fill = new THREE.DirectionalLight(0xffeebb, 0.8); 
             fill.position.set(0, 0, 50);
             scene.add(fill);
         }
@@ -296,8 +292,8 @@
         function setupPostProcessing() {
             const renderScene = new RenderPass(scene, camera);
             const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloomPass.threshold = 0.6; 
-            bloomPass.strength = 0.6; 
+            bloomPass.threshold = 0.5;  
+            bloomPass.strength = 0.7;   
             bloomPass.radius = 0.5;
 
             composer = new EffectComposer(renderer);
@@ -306,22 +302,57 @@
         }
 
         function createTextures() {
+            // Increased canvas size for sharper stripes
             const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 128;
+            canvas.width = 256; canvas.height = 256;
             const ctx = canvas.getContext('2d');
             
+            // 1. Background (White)
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0,0,128,128);
-            ctx.fillStyle = '#bb0a1e'; 
+            ctx.fillRect(0,0,256,256);
+            
+            // 2. Stripes (Vivid Red)
+            ctx.fillStyle = '#d6001c'; 
             ctx.beginPath();
-            for(let i=-128; i<256; i+=32) {
-                ctx.moveTo(i, 0); ctx.lineTo(i+32, 128); ctx.lineTo(i+16, 128); ctx.lineTo(i-16, 0);
+            
+            // Wider, less dense stripes
+            // Loop step increased to 80 (was effectively 32 in previous logic)
+            // Red width = 50px, White width = 30px
+            const step = 80;
+            const stripeWidth = 50; 
+            const slantOffset = 60;
+
+            for(let i=-256; i<512; i+=step) {
+                ctx.moveTo(i, 0); 
+                ctx.lineTo(i + stripeWidth, 0); 
+                ctx.lineTo(i + stripeWidth + slantOffset, 256); 
+                ctx.lineTo(i + slantOffset, 256); 
             }
             ctx.fill();
+
             caneTexture = new THREE.CanvasTexture(canvas);
+            caneTexture.colorSpace = THREE.SRGBColorSpace;
             caneTexture.wrapS = THREE.RepeatWrapping;
             caneTexture.wrapT = THREE.RepeatWrapping;
-            caneTexture.repeat.set(3, 3);
+            
+            // Reduced repeat (y: 3 -> 2) to make the spiral pattern larger/less dense on the candy
+            caneTexture.repeat.set(2, 2); 
+        }
+
+        function createGlowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.3, 'rgba(255, 215, 0, 0.6)'); 
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            return texture;
         }
 
         class Particle {
@@ -334,9 +365,8 @@
                 this.posScatter = new THREE.Vector3();
                 this.baseScale = mesh.scale.x; 
                 
-                // Nebula properties
                 if (type === 'NEBULA') {
-                    this.nebulaSpeed = 0.05 + Math.random() * 0.1; // Very slow drift
+                    this.nebulaSpeed = 0.05 + Math.random() * 0.1; 
                     this.nebulaOffset = Math.random() * 100;
                 }
 
@@ -352,18 +382,34 @@
 
             calculatePositions() {
                 if (this.type === 'NEBULA') {
-                    // Wide background spread behind the tree
-                    const x = (Math.random() - 0.5) * 120; // Wide horizontally
-                    const y = (Math.random() - 0.5) * 80;  // High vertically
-                    const z = -20 - Math.random() * 40;    // Behind the tree (z < 0)
-                    this.posTree.set(x, y, z);
+                    const radius = 60 + Math.random() * 60; 
+                    const theta = Math.random() * Math.PI * 2; 
+                    const height = (Math.random() - 0.5) * 120; 
+
+                    const x = radius * Math.cos(theta);
+                    const z = radius * Math.sin(theta);
                     
-                    // Keep scatter position separate
+                    this.posTree.set(x, height, z);
                     this.posScatter.copy(this.posTree);
                     return; 
                 }
+
+                if (this.type === 'MAGIC') {
+                    const h = CONFIG.particles.treeHeight;
+                    const halfH = h / 2;
+                    const y = (Math.random() * h) - halfH; 
+                    
+                    const t = (y + halfH) / h; 
+                    const rMax = CONFIG.particles.treeRadius * (1.0 - t);
+                    
+                    const r = Math.sqrt(Math.random()) * rMax;
+                    const angle = Math.random() * Math.PI * 2;
+                    
+                    this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
+                    this.posScatter.copy(this.posTree).multiplyScalar(2.0 + Math.random() * 2);
+                    return;
+                }
                 
-                // TREE Logic
                 const h = CONFIG.particles.treeHeight;
                 const halfH = h / 2;
                 let t = Math.pow(Math.random(), 1.5); 
@@ -374,7 +420,6 @@
                 const r = rMax * (0.2 + 0.8 * Math.pow(Math.random(), 0.6)); 
                 this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
 
-                // SCATTER Logic
                 let rScatter = this.isDust ? (12 + Math.random()*20) : (8 + Math.random()*12);
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
@@ -386,25 +431,16 @@
             }
 
             update(dt, mode, focusTargetMesh) {
-                // Background Nebula Logic (Independent)
                 if (this.type === 'NEBULA') {
-                    // Gentle shimmer and drift
                     const time = clock.getElapsedTime();
-                    
-                    // Slight vertical drift
                     let y = this.posTree.y + Math.sin(time * 0.5 + this.nebulaOffset) * 0.5;
                     this.mesh.position.set(this.posTree.x, y, this.posTree.z);
-                    
-                    // Twinkle scaling
                     const s = this.baseScale * (0.8 + 0.4 * Math.sin(time * 2 + this.nebulaOffset));
                     this.mesh.scale.set(s, s, s);
-                    
-                    // Slow rotation
                     this.mesh.rotation.z += dt * 0.1;
-                    return; // Skip rest of logic for nebula
+                    return; 
                 }
 
-                // --- MAIN TREE LOGIC ---
                 let target;
                 if (mode === 'TREE') {
                     target = this.posTree;
@@ -441,6 +477,10 @@
                 if (this.isDust) {
                     s = this.baseScale * (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
                     if (mode === 'TREE') s = 0; 
+                } else if (this.type === 'MAGIC') {
+                    const time = clock.elapsedTime;
+                    s = this.baseScale * (0.4 + 0.6 * Math.sin(time * 3 + this.mesh.id * 0.1));
+                    if (mode !== 'TREE') s = 0; 
                 } else if (mode === 'SCATTER' && this.type === 'PHOTO') {
                     s = this.baseScale * 2.5; 
                 } else if (mode === 'FOCUS') {
@@ -464,42 +504,53 @@
 
             const goldMat = new THREE.MeshStandardMaterial({
                 color: CONFIG.colors.champagneGold,
-                metalness: 0.9, roughness: 0.1,
-                envMapIntensity: 1.5,
+                metalness: 1.0, 
+                roughness: 0.05, 
+                envMapIntensity: 2.5, 
                 emissive: 0x443300,
-                emissiveIntensity: 0.2
+                emissiveIntensity: 0.4 
             });
 
             const greenMat = new THREE.MeshStandardMaterial({
                 color: CONFIG.colors.deepGreen,
-                metalness: 0.3, roughness: 0.4,
+                metalness: 0.3, roughness: 0.3,
                 emissive: 0x001100,
-                emissiveIntensity: 0.1 
+                emissiveIntensity: 0.2
             });
 
             const redMat = new THREE.MeshPhysicalMaterial({
                 color: CONFIG.colors.accentRed,
-                metalness: 0.4, roughness: 0.2, clearcoat: 1.0, clearcoatRoughness: 0.1,
-                emissive: 0x220000,
-                emissiveIntensity: 0.2
+                metalness: 0.2,       
+                roughness: 0.25,      
+                sheen: 1.5,      
+                sheenRoughness: 0.4,  
+                sheenColor: 0xffaaaa, 
+                clearcoat: 0.1,       
+                emissive: 0x660000,   
+                emissiveIntensity: 0.5 
             });
             
-            const candyMat = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.4 });
+            // Reduced roughness for glossy hard candy look
+            const candyMat = new THREE.MeshStandardMaterial({ 
+                map: caneTexture, 
+                roughness: 0.2, 
+                metalness: 0.1 
+            });
 
             for (let i = 0; i < CONFIG.particles.count; i++) {
                 const rand = Math.random();
                 let mesh, type;
                 
-                if (rand < 0.45) { // 45% Green
+                if (rand < 0.60) { // 60% Green 
                     mesh = new THREE.Mesh(boxGeo, greenMat);
                     type = 'BOX';
-                } else if (rand < 0.75) { // 30% Red
+                } else if (rand < 0.70) { // 10% Red 
                     mesh = new THREE.Mesh(sphereGeo, redMat);
                     type = 'RED';
-                } else if (rand < 0.90) { // 15% Gold Sphere
+                } else if (rand < 0.90) { // 20% Gold Sphere 
                     mesh = new THREE.Mesh(sphereGeo, goldMat);
                     type = 'GOLD_SPHERE';
-                } else if (rand < 0.96) { // 6% Gold Box
+                } else if (rand < 0.96) { // 6% Gold Box 
                     mesh = new THREE.Mesh(boxGeo, goldMat);
                     type = 'GOLD_BOX';
                 } else { // 4% Candy
@@ -538,39 +589,81 @@
             });
             starGeo.center(); 
 
+            // Updated Star Material
             const starMat = new THREE.MeshStandardMaterial({
                 color: CONFIG.colors.champagneGold, 
                 emissive: CONFIG.colors.starGlow, 
-                emissiveIntensity: 2.0,
+                emissiveIntensity: 1.5, 
                 metalness: 1.0, roughness: 0.1
             });
             
             const star = new THREE.Mesh(starGeo, starMat);
             star.position.set(0, CONFIG.particles.treeHeight/2 + 1.2, 0);
             
-            const starLight = new THREE.PointLight(CONFIG.colors.starGlow, 2, 10);
+            const starLight = new THREE.PointLight(CONFIG.colors.starGlow, 2.5, 15);
             starLight.position.set(0, 0, 0.5);
             star.add(starLight);
-            star.userData = { update: (dt) => { star.rotation.y -= dt; } };
+
+            // Glow Sprite
+            const glowTex = createGlowTexture();
+            const glowMat = new THREE.SpriteMaterial({ 
+                map: glowTex, 
+                color: CONFIG.colors.starGlow, 
+                transparent: true, 
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending, 
+                depthWrite: false
+            });
+            const glowSprite = new THREE.Sprite(glowMat);
+            glowSprite.scale.set(6, 6, 6);
+            star.add(glowSprite);
+
+            star.userData = { 
+                update: (dt) => { 
+                    const t = clock.elapsedTime * 2.0;
+                    const pulsate = Math.sin(t); 
+                    starLight.intensity = 2.5 + pulsate * 0.8;
+                    glowSprite.material.opacity = 0.6 + pulsate * 0.15;
+                    const scale = 6 + pulsate * 0.5;
+                    glowSprite.scale.set(scale, scale, scale);
+                    starMat.emissiveIntensity = 1.5 + pulsate * 0.5;
+                } 
+            };
 
             mainGroup.add(star);
             mainGroup.add(photoMeshGroup);
         }
 
+        function createMagicDust() {
+            const geo = new THREE.TetrahedronGeometry(0.09, 0); 
+            const mat = new THREE.MeshBasicMaterial({ 
+                color: CONFIG.colors.starGlow, 
+                transparent: true, 
+                opacity: 0.9, 
+                blending: THREE.AdditiveBlending 
+            });
+            
+            for(let i=0; i<CONFIG.particles.magicCount; i++) {
+                 const mesh = new THREE.Mesh(geo, mat);
+                 mesh.scale.setScalar(1.0 + Math.random() * 1.5);
+                 mainGroup.add(mesh);
+                 particleSystem.push(new Particle(mesh, 'MAGIC', false));
+            }
+        }
+
         function createNebula() {
-            // Stars in the background
-            const geo = new THREE.TetrahedronGeometry(0.1, 0); 
+            const geo = new THREE.TetrahedronGeometry(0.2, 0); 
             const mat = new THREE.MeshBasicMaterial({ 
                 color: CONFIG.colors.nebulaGold,
                 transparent: true, 
-                opacity: 0.6
+                opacity: 0.9, 
+                blending: THREE.AdditiveBlending 
             });
 
             for(let i=0; i<CONFIG.particles.nebulaCount; i++) {
                 const mesh = new THREE.Mesh(geo, mat);
-                const s = 0.5 + Math.random();
+                const s = 1.0 + Math.random() * 2.0; 
                 mesh.scale.set(s,s,s);
-                // Add to background group instead of main group
                 bgGroup.add(mesh);
                 particleSystem.push(new Particle(mesh, 'NEBULA', false));
             }
@@ -589,8 +682,13 @@
         }
 
         function addPhotoToScene(texture) {
-            const frameGeo = new THREE.BoxGeometry(1.4, 1.4, 0.05);
-            const frameMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.2 });
+            const frameGeo = new THREE.BoxGeometry(1.26, 1.26, 0.05);
+            const frameMat = new THREE.MeshStandardMaterial({ 
+                color: CONFIG.colors.champagneGold, 
+                metalness: 1.0, 
+                roughness: 0.1,
+                envMapIntensity: 2.0 
+            });
             const frame = new THREE.Mesh(frameGeo, frameMat);
 
             const photoGeo = new THREE.PlaneGeometry(1.2, 1.2);
@@ -644,9 +742,6 @@
             });
             
             if (navigator.mediaDevices?.getUserMedia) {
-                // IMPORTANT for Mobile compatibility:
-                // 1. facingMode: "user" prefers front camera
-                // 2. Low resolution ideal to prevent hardware overload on old phones
                 const constraints = { 
                     video: { 
                         facingMode: "user",
@@ -660,8 +755,6 @@
                     video.srcObject = stream;
                     video.onloadedmetadata = () => { video.play(); };
                     video.addEventListener("loadeddata", predictWebcam);
-                    
-                    // Show webcam feedback if successful
                     document.getElementById('webcam-wrapper').style.opacity = 1; 
                 } catch (e) {
                     console.warn("Mobile camera access denied or unavailable", e);
@@ -714,27 +807,21 @@
         }
 
         function setupEvents() {
-            // Resize handling
             window.addEventListener('resize', () => {
                 const aspect = window.innerWidth / window.innerHeight;
                 camera.aspect = aspect;
-                
-                // Smart Zoom for Portrait Mode
                 let camZ = CONFIG.camera.z;
                 if (aspect < 0.8) {
                     camZ = CONFIG.camera.z / aspect * 0.8;
                 }
                 camera.position.z = camZ;
-                
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 composer.setSize(window.innerWidth, window.innerHeight);
             });
 
-            // UI Toggle
             document.getElementById('file-input').addEventListener('change', handleImageUpload);
             
-            // Hidden shortcut (Keep keyboard shortcut just in case)
             window.addEventListener('keydown', (e) => {
                 if (e.key.toLowerCase() === 'h') {
                     const controls = document.querySelector('.upload-wrapper');
@@ -742,7 +829,6 @@
                 }
             });
 
-            // TOUCH EVENTS FOR ROTATION
             const canvas = document.getElementById('canvas-container');
             
             canvas.addEventListener('touchstart', (e) => {
@@ -754,7 +840,6 @@
 
             canvas.addEventListener('touchmove', (e) => {
                 if (STATE.touch.isDragging && e.touches.length === 1) {
-                    // Prevent page scroll
                     e.preventDefault(); 
                     const currentX = e.touches[0].clientX;
                     const deltaX = currentX - STATE.touch.lastX;
@@ -772,18 +857,15 @@
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
 
-            // Rotation Logic Priority: Hand > Touch > Auto
             if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
-                // Hand control logic
-                const targetRotY = STATE.hand.x * Math.PI * 0.9; 
+                // Modified: Inverted X (added -) so left hand movement moves particles left
+                const targetRotY = -STATE.hand.x * Math.PI * 0.9; 
                 const targetRotX = STATE.hand.y * Math.PI * 0.25;
                 STATE.rotation.y += (targetRotY - STATE.rotation.y) * 3.0 * dt;
                 STATE.rotation.x += (targetRotX - STATE.rotation.x) * 3.0 * dt;
             } else if (STATE.touch.isDragging) {
-                // Touch Dragging (Handled in event listener, just dampen X)
                 STATE.rotation.x += (0 - STATE.rotation.x) * 2.0 * dt;
             } else {
-                // Auto Rotation
                 if(STATE.mode === 'TREE') {
                     STATE.rotation.y += 0.3 * dt;
                     STATE.rotation.x += (0 - STATE.rotation.x) * 2.0 * dt;
@@ -792,14 +874,11 @@
                 }
             }
 
-            // Apply rotation to main tree group ONLY
             mainGroup.rotation.y = STATE.rotation.y;
             mainGroup.rotation.x = STATE.rotation.x;
 
-            // Background rotation (Slow, constant)
             bgGroup.rotation.y += 0.02 * dt;
 
-            // Rotate star if exists
             const star = mainGroup.children.find(c => c.userData && c.userData.update);
             if(star) star.userData.update(dt);
 
