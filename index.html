@@ -681,8 +681,26 @@
             }
         }
 
-        function addPhotoToScene(texture) {
-            const frameGeo = new THREE.BoxGeometry(1.26, 1.26, 0.05);
+        function addPhotoToScene(texture, aspect = 1.0) {
+            // Determine dimensions to preserve aspect ratio while keeping the scale similar
+            // Base maximum dimension size
+            const baseSize = 1.2;
+            let w, h;
+            
+            if (aspect >= 1) {
+                // Landscape or Square
+                w = baseSize;
+                h = baseSize / aspect;
+            } else {
+                // Portrait
+                h = baseSize;
+                w = baseSize * aspect;
+            }
+
+            // Create frame with padding (preserving relative border thickness)
+            const padding = 0.06;
+            const frameGeo = new THREE.BoxGeometry(w + padding, h + padding, 0.05);
+            
             const frameMat = new THREE.MeshStandardMaterial({ 
                 color: CONFIG.colors.champagneGold, 
                 metalness: 1.0, 
@@ -691,8 +709,12 @@
             });
             const frame = new THREE.Mesh(frameGeo, frameMat);
 
-            const photoGeo = new THREE.PlaneGeometry(1.2, 1.2);
-            const photoMat = new THREE.MeshBasicMaterial({ map: texture });
+            // Create photo geometry matching the aspect ratio
+            const photoGeo = new THREE.PlaneGeometry(w, h);
+            const photoMat = new THREE.MeshBasicMaterial({ 
+                map: texture,
+                side: THREE.DoubleSide
+            });
             const photo = new THREE.Mesh(photoGeo, photoMat);
             photo.position.z = 0.04;
 
@@ -715,7 +737,9 @@
                 reader.onload = (ev) => {
                     new THREE.TextureLoader().load(ev.target.result, (t) => {
                         t.colorSpace = THREE.SRGBColorSpace;
-                        addPhotoToScene(t);
+                        // Calculate aspect ratio from the image
+                        const aspect = t.image.width / t.image.height;
+                        addPhotoToScene(t, aspect);
                     });
                 }
                 reader.readAsDataURL(f);
