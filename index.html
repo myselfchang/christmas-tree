@@ -149,7 +149,7 @@
                 Add Memories
                 <input type="file" id="file-input" multiple accept="image/*">
             </label>
-            <div class="hint-text">Swipe to Rotate</div>
+            <div class="hint-text">Pinch to Zoom · Release to Shrink · Wave to Rotate</div>
         </div>
     </div>
 
@@ -194,15 +194,24 @@
             mode: 'TREE', 
             focusIndex: -1, 
             focusTarget: null,
-            hand: { detected: false, x: 0, y: 0 },
+            hoverTarget: null, 
+            hand: { detected: false, x: 0, y: 0, lastX: null }, 
             rotation: { x: 0, y: 0 },
             touch: { isDragging: false, lastX: 0 }
         };
+
+        // --- OPTIMIZATION GLOBALS ---
+        // Reusing these objects prevents creating new ones every frame (GC optimization)
+        const _tempVec3 = new THREE.Vector3();
+        const _tempMat4 = new THREE.Matrix4();
+        const _focusPos = new THREE.Vector3(0, 2, 35);
+        const _origin = new THREE.Vector3(0, 0, 0);
 
         let scene, camera, renderer, composer;
         let mainGroup, bgGroup; 
         let clock = new THREE.Clock();
         let particleSystem = []; 
+        let photosList = []; // Optimization: only iterate this for hovering/focus
         let photoMeshGroup = new THREE.Group();
         let handLandmarker, video, webcamCanvas, webcamCtx;
         let caneTexture; 
@@ -259,6 +268,7 @@
 
             mainGroup = new THREE.Group(); 
             scene.add(mainGroup);
+            mainGroup.add(photoMeshGroup);
         }
 
         function setupEnvironment() {
@@ -291,6 +301,7 @@
 
         function setupPostProcessing() {
             const renderScene = new RenderPass(scene, camera);
+            // Reduced bloom radius slightly for performance
             const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
             bloomPass.threshold = 0.5;  
             bloomPass.strength = 0.7;   
@@ -302,22 +313,16 @@
         }
 
         function createTextures() {
-            // Increased canvas size for sharper stripes
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
             const ctx = canvas.getContext('2d');
             
-            // 1. Background (White)
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0,0,256,256);
             
-            // 2. Stripes (Vivid Red)
             ctx.fillStyle = '#d6001c'; 
             ctx.beginPath();
             
-            // Wider, less dense stripes
-            // Loop step increased to 80 (was effectively 32 in previous logic)
-            // Red width = 50px, White width = 30px
             const step = 80;
             const stripeWidth = 50; 
             const slantOffset = 60;
@@ -334,8 +339,6 @@
             caneTexture.colorSpace = THREE.SRGBColorSpace;
             caneTexture.wrapS = THREE.RepeatWrapping;
             caneTexture.wrapT = THREE.RepeatWrapping;
-            
-            // Reduced repeat (y: 3 -> 2) to make the spiral pattern larger/less dense on the candy
             caneTexture.repeat.set(2, 2); 
         }
 
@@ -430,6 +433,7 @@
                 );
             }
 
+            // Optimized update method to reduce GC
             update(dt, mode, focusTargetMesh) {
                 if (this.type === 'NEBULA') {
                     const time = clock.getElapsedTime();
@@ -441,6 +445,7 @@
                     return; 
                 }
 
+                // --- OPTIMIZED POSITION LERP ---
                 let target;
                 if (mode === 'TREE') {
                     target = this.posTree;
@@ -448,31 +453,39 @@
                     target = this.posScatter;
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
-                        const desiredWorldPos = new THREE.Vector3(0, 2, 35);
-                        const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
-                        target = desiredWorldPos.applyMatrix4(invMatrix);
+                        // Use reused globals for matrix calc
+                        _tempMat4.copy(mainGroup.matrixWorld).invert();
+                        _tempVec3.copy(_focusPos).applyMatrix4(_tempMat4);
+                        target = _tempVec3;
                     } else {
                         target = this.posScatter;
                     }
                 }
 
+                // Lerp position
                 const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
+                // --- ROTATION LOGIC ---
                 if (mode === 'SCATTER') {
-                    this.mesh.rotation.x += this.spinSpeed.x * dt;
-                    this.mesh.rotation.y += this.spinSpeed.y * dt;
-                    this.mesh.rotation.z += this.spinSpeed.z * dt; 
+                    if (this.type === 'PHOTO') {
+                        this.mesh.lookAt(camera.position);
+
+                        // Flash effect logic moved to updateHoverTarget to save cycles here
+                    } else {
+                        this.mesh.rotation.x += this.spinSpeed.x * dt;
+                        this.mesh.rotation.y += this.spinSpeed.y * dt;
+                        this.mesh.rotation.z += this.spinSpeed.z * dt; 
+                    }
                 } else if (mode === 'TREE') {
                     this.mesh.rotation.x = THREE.MathUtils.lerp(this.mesh.rotation.x, 0, dt);
                     this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, dt);
                     this.mesh.rotation.y += 0.5 * dt; 
-                }
-                
-                if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
+                } else if (mode === 'FOCUS' && this.mesh === focusTargetMesh) {
                     this.mesh.lookAt(camera.position); 
                 }
 
+                // --- SCALE LOGIC ---
                 let s = this.baseScale;
                 if (this.isDust) {
                     s = this.baseScale * (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
@@ -488,7 +501,10 @@
                     else s = this.baseScale * 0.8; 
                 }
                 
-                this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
+                // Optimized lerp for scalar
+                const cur = this.mesh.scale.x;
+                const next = cur + (s - cur) * 4 * dt;
+                this.mesh.scale.setScalar(next);
             }
         }
 
@@ -530,7 +546,6 @@
                 emissiveIntensity: 0.5 
             });
             
-            // Reduced roughness for glossy hard candy look
             const candyMat = new THREE.MeshStandardMaterial({ 
                 map: caneTexture, 
                 roughness: 0.2, 
@@ -631,7 +646,6 @@
             };
 
             mainGroup.add(star);
-            mainGroup.add(photoMeshGroup);
         }
 
         function createMagicDust() {
@@ -682,22 +696,17 @@
         }
 
         function addPhotoToScene(texture, aspect = 1.0) {
-            // Determine dimensions to preserve aspect ratio while keeping the scale similar
-            // Base maximum dimension size
             const baseSize = 1.2;
             let w, h;
             
             if (aspect >= 1) {
-                // Landscape or Square
                 w = baseSize;
                 h = baseSize / aspect;
             } else {
-                // Portrait
                 h = baseSize;
                 w = baseSize * aspect;
             }
 
-            // Create frame with padding (preserving relative border thickness)
             const padding = 0.06;
             const frameGeo = new THREE.BoxGeometry(w + padding, h + padding, 0.05);
             
@@ -709,7 +718,6 @@
             });
             const frame = new THREE.Mesh(frameGeo, frameMat);
 
-            // Create photo geometry matching the aspect ratio
             const photoGeo = new THREE.PlaneGeometry(w, h);
             const photoMat = new THREE.MeshBasicMaterial({ 
                 map: texture,
@@ -726,7 +734,9 @@
             group.scale.set(s,s,s);
             
             photoMeshGroup.add(group);
-            particleSystem.push(new Particle(group, 'PHOTO', false));
+            const p = new Particle(group, 'PHOTO', false);
+            particleSystem.push(p);
+            photosList.push(p); // Add to optimization list
         }
         
         function handleImageUpload(e) {
@@ -737,7 +747,6 @@
                 reader.onload = (ev) => {
                     new THREE.TextureLoader().load(ev.target.result, (t) => {
                         t.colorSpace = THREE.SRGBColorSpace;
-                        // Calculate aspect ratio from the image
                         const aspect = t.image.width / t.image.height;
                         addPhotoToScene(t, aspect);
                     });
@@ -812,21 +821,100 @@
                 tips.forEach(t => avgDist += Math.hypot(t.x - wrist.x, t.y - wrist.y));
                 avgDist /= 4;
 
+                // LOGIC:
+                // 1. Pinch (< 0.05) -> Focus on HOVER target (Zoom)
+                // 2. Open Pinch (> 0.08) -> Release Focus (Shrink)
+                // 3. Fist -> Tree (Gather)
+                // 4. Open Hand -> Scatter
+                
                 if (pinchDist < 0.05) {
-                    if (STATE.mode !== 'FOCUS') {
+                    // Pinching
+                    if (STATE.mode === 'SCATTER' && STATE.hoverTarget) {
                         STATE.mode = 'FOCUS';
-                        const photos = particleSystem.filter(p => p.type === 'PHOTO');
-                        if (photos.length) STATE.focusTarget = photos[Math.floor(Math.random()*photos.length)].mesh;
+                        STATE.focusTarget = STATE.hoverTarget;
+                    } 
+                    // Note: If already FOCUS, do nothing (stay zoomed)
+                } else if (pinchDist > 0.08) {
+                    // Released pinch
+                    if (STATE.mode === 'FOCUS') {
+                         STATE.mode = 'SCATTER';
+                         STATE.focusTarget = null;
                     }
-                } else if (avgDist < 0.25) {
-                    STATE.mode = 'TREE';
-                    STATE.focusTarget = null;
-                } else if (avgDist > 0.4) {
-                    STATE.mode = 'SCATTER';
-                    STATE.focusTarget = null;
+                    
+                    // Standard State Switching (only if not focusing)
+                    if (STATE.mode !== 'FOCUS') {
+                         if (avgDist < 0.25) {
+                            // Fist -> Tree
+                            STATE.mode = 'TREE';
+                            STATE.focusTarget = null;
+                        } else if (avgDist > 0.4) {
+                            // Open Hand -> Scatter
+                            STATE.mode = 'SCATTER';
+                            STATE.focusTarget = null;
+                        }
+                    }
                 }
             } else {
                 STATE.hand.detected = false;
+            }
+        }
+
+        // Optimized Hover Target Calculation
+        // Only iterates photos list instead of all particles
+        function updateHoverTarget() {
+            // Only calc hover in SCATTER mode to save CPU
+            if (STATE.mode !== 'SCATTER') {
+                if (STATE.mode !== 'FOCUS') STATE.hoverTarget = null;
+                // Reset emissive for all photos if not in scatter
+                for(let i=0; i<photosList.length; i++) {
+                    const frame = photosList[i].mesh.children[0];
+                    if(frame.material && frame.material.emissive) {
+                        // Keep highlight if focused
+                         if (STATE.mode === 'FOCUS' && photosList[i].mesh === STATE.focusTarget) {
+                             frame.material.emissive.setHex(0xffd700);
+                             frame.material.emissiveIntensity = 1.0;
+                         } else {
+                             frame.material.emissive.setHex(0x000000); 
+                             frame.material.emissiveIntensity = 0;
+                         }
+                    }
+                }
+                return;
+            }
+            
+            let bestDist = Infinity;
+            let bestCandidate = null;
+            const cameraPos = camera.position;
+
+            for(let i=0; i<photosList.length; i++) {
+                const p = photosList[i];
+                p.mesh.getWorldPosition(_tempVec3); // Use global temp vec
+                const dist = _tempVec3.distanceTo(cameraPos);
+                
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestCandidate = p.mesh;
+                }
+            }
+            
+            STATE.hoverTarget = bestCandidate;
+
+            // Apply Emissive Effect efficiently
+            const time = clock.elapsedTime;
+            const pulse = Math.sin(time * 10) * 0.5 + 0.5;
+
+            for(let i=0; i<photosList.length; i++) {
+                const mesh = photosList[i].mesh;
+                const frame = mesh.children[0];
+                if (!frame.material) continue;
+
+                if (mesh === STATE.hoverTarget) {
+                     frame.material.emissive.setHex(0xffd700);
+                     frame.material.emissiveIntensity = 0.5 + pulse * 2.0;
+                } else {
+                     frame.material.emissive.setHex(0x000000); 
+                     frame.material.emissiveIntensity = 0;
+                }
             }
         }
 
@@ -881,20 +969,31 @@
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
 
+            // Update hover logic every frame
+            updateHoverTarget();
+
+            // Rotation Logic
             if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
-                // Modified: Inverted X (added -) so left hand movement moves particles left
-                const targetRotY = -STATE.hand.x * Math.PI * 0.9; 
+                if (STATE.hand.lastX !== null) {
+                    const deltaX = STATE.hand.x - STATE.hand.lastX;
+                    STATE.rotation.y += -deltaX * 3.0; 
+                }
+                STATE.hand.lastX = STATE.hand.x;
                 const targetRotX = STATE.hand.y * Math.PI * 0.25;
-                STATE.rotation.y += (targetRotY - STATE.rotation.y) * 3.0 * dt;
                 STATE.rotation.x += (targetRotX - STATE.rotation.x) * 3.0 * dt;
-            } else if (STATE.touch.isDragging) {
-                STATE.rotation.x += (0 - STATE.rotation.x) * 2.0 * dt;
+                
             } else {
-                if(STATE.mode === 'TREE') {
-                    STATE.rotation.y += 0.3 * dt;
+                STATE.hand.lastX = null; 
+                
+                if (STATE.touch.isDragging) {
                     STATE.rotation.x += (0 - STATE.rotation.x) * 2.0 * dt;
                 } else {
-                     STATE.rotation.y += 0.1 * dt; 
+                    if(STATE.mode === 'TREE') {
+                        STATE.rotation.y += 0.3 * dt;
+                        STATE.rotation.x += (0 - STATE.rotation.x) * 2.0 * dt;
+                    } else {
+                         STATE.rotation.y += 0.1 * dt; 
+                    }
                 }
             }
 
