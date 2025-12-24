@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Christmas Tree</title>
+    <title>Luxury Christmas Tree</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Times New Roman', serif; touch-action: none; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -168,12 +168,12 @@
             transform: rotate(90deg);
         }
 
-        /* Webcam feedback - Updated for iOS */
+        /* FIXED: Webcam element for iOS compatibility */
         #webcam-wrapper {
             position: absolute; 
             top: 0; left: 0; 
             width: 1px; height: 1px;
-            opacity: 0; 
+            opacity: 0; /* Keep it invisible but rendered */
             pointer-events: none;
             z-index: -10;
             overflow: hidden;
@@ -182,10 +182,11 @@
         #webcam {
             width: 320px; 
             height: 240px;
+            /* iOS needs object-fit to render properly sometimes */
             object-fit: cover; 
         }
 
-        /* Debug Indicator */
+        /* Debug Indicator (Tiny dot to show hand is detected) */
         #hand-indicator {
             position: absolute;
             bottom: 20px;
@@ -227,14 +228,15 @@
 
     <div id="loader">
         <div class="spinner"></div>
-        <div class="loader-text">正在加载节日魔法</div>
+        <div class="loader-text">Loading Holiday Magic</div>
     </div>
 
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
-        <div id="ui-toggle-btn" title="显示/隐藏设置">⚙</div>
+        <div id="ui-toggle-btn" title="Toggle Controls">⚙</div>
         
+        <!-- Visual feedback dot -->
         <div id="hand-indicator"></div>
 
         <h1>Merry Christmas</h1>
@@ -248,9 +250,9 @@
                 <button class="upload-btn" id="cam-btn">开启手势控制</button>
             </div>
             <div class="btn-group">
-                <button class="reset-btn" id="reset-btn">重置回忆</button>
+                <button class="reset-btn" id="reset-btn">重置照片</button>
             </div>
-            <div class="hint-text">捏合放大 · 张开缩小 · 挥手旋转</div>
+            <div class="hint-text">张开手掌放大 挥手旋转 · 握拳缩小 · 捏合查看照片 · 按H键隐藏此处 </div>
         </div>
     </div>
 
@@ -369,7 +371,7 @@
             const store = transaction.objectStore(STORE_NAME);
             const req = store.clear();
             req.onsuccess = () => {
-                alert("回忆已重置，正在刷新页面...");
+                alert("Memories cleared. Refreshing...");
                 location.reload();
             }
         }
@@ -920,7 +922,7 @@
             if (isCameraRunning) return;
 
             const btn = document.getElementById('cam-btn');
-            btn.textContent = "正在初始化...";
+            btn.textContent = "加载中 无反应请再次点击";
             btn.style.opacity = 0.7;
 
             video = document.getElementById('webcam');
@@ -943,7 +945,6 @@
                     const constraints = { 
                         video: { 
                             facingMode: "user",
-                            // Relaxed constraints for compatibility
                             width: { ideal: 320 }, 
                             height: { ideal: 240 }
                         } 
@@ -952,25 +953,26 @@
                     const stream = await navigator.mediaDevices.getUserMedia(constraints);
                     video.srcObject = stream;
                     
-                    // Promise based play to handle potential rejection
+                    // Explicit play for iOS
                     await video.play(); 
                     
-                    // Wait for data to be ready
+                    // iOS sometimes needs a moment for video dimensions to be ready
                     video.addEventListener("loadeddata", () => {
-                        predictWebcam();
-                        document.getElementById('webcam-wrapper').style.opacity = 1;
+                        // Ensure loop starts
                         isCameraRunning = true;
+                        predictWebcam();
                         
-                        btn.textContent = "手势已开启";
+                        // Update UI
+                        btn.textContent = "相机已打开";
                         btn.style.background = "#d4af37";
                         btn.style.color = "#051a0d";
                         btn.style.opacity = 1;
                     });
                 }
             } catch (e) {
-                console.warn("Camera init failed:", e);
-                btn.textContent = "错误 - 重试";
-                alert("无法启动手势控制。\n\n1. 确保使用 HTTPS。\n2. 允许摄像头权限。\n3. iOS: 检查 'Motion & Orientation Access' 设置。");
+                console.warn("Camera/AI init failed:", e);
+                btn.textContent = "Error";
+                alert("Camera error: " + e.message + "\n\nMake sure you are using HTTPS.");
             }
         }
 
