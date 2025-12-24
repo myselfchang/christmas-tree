@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Luxury Christmas Tree</title>
+    <title>Christmas Tree</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Times New Roman', serif; touch-action: none; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
@@ -42,25 +42,30 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Typography */
+        /* Typography - Updated to Cursive */
         h1 { 
-            color: #d4af37; font-size: 56px; margin: 0; font-weight: 400; 
-            letter-spacing: 6px; 
+            color: #d4af37; 
+            font-size: 72px; /* Increased size for script font */
+            margin: 0; 
+            font-weight: 400; 
+            letter-spacing: 2px; 
             text-shadow: 0 0 30px rgba(212, 175, 55, 0.4); 
             background: linear-gradient(to bottom, #fceea7, #d4af37);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            font-family: 'Cinzel', 'Times New Roman', serif;
-            opacity: 0.9;
+            /* New Cursive Font */
+            font-family: 'Great Vibes', cursive;
+            opacity: 0.95;
             text-align: center;
             padding: 0 20px;
+            line-height: 1.2;
         }
 
         @media (max-width: 600px) {
-            h1 { font-size: 36px; letter-spacing: 3px; margin-top: 20px; }
+            h1 { font-size: 48px; letter-spacing: 1px; margin-top: 20px; }
             #ui-layer { padding-top: 20px; }
         }
 
-        /* Upload Button */
+        /* Upload Button Wrapper - Default Hidden via class in HTML */
         .upload-wrapper {
             margin-top: 20px;
             pointer-events: auto;
@@ -71,6 +76,12 @@
             align-items: center;
             gap: 10px;
         }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
         .upload-btn {
             background: rgba(10, 30, 15, 0.6); 
             border: 1px solid rgba(212, 175, 55, 0.4); 
@@ -90,6 +101,27 @@
             color: #051a0d; 
             box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
         }
+
+        .reset-btn {
+            background: rgba(30, 10, 10, 0.6); 
+            border: 1px solid rgba(212, 55, 55, 0.4); 
+            color: #d45555; 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            font-size: 10px;
+            transition: all 0.4s;
+            display: inline-block;
+            backdrop-filter: blur(5px);
+            border-radius: 2px;
+        }
+        .reset-btn:hover {
+            background: #d45555; 
+            color: #1a0505;
+            box-shadow: 0 0 15px rgba(212, 55, 55, 0.4);
+        }
+
         .hint-text {
             color: rgba(212, 175, 55, 0.5);
             font-size: 9px;
@@ -99,6 +131,35 @@
         }
 
         #file-input { display: none; }
+
+        /* Toggle Button (Gear Icon) */
+        #ui-toggle-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.2);
+            color: #d4af37;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            pointer-events: auto;
+            font-size: 24px;
+            transition: all 0.3s;
+            backdrop-filter: blur(4px);
+            opacity: 0.7;
+        }
+        #ui-toggle-btn:hover {
+            background: rgba(212, 175, 55, 0.1);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+            opacity: 1;
+            transform: rotate(90deg);
+        }
 
         /* Webcam feedback - Hidden by default, shows if active */
         #webcam-wrapper {
@@ -115,10 +176,19 @@
             #webcam-wrapper {
                 bottom: 20px; right: 20px; width: 80px; height: 60px;
             }
+            #ui-toggle-btn {
+                top: 15px;
+                right: 15px;
+                width: 36px;
+                height: 36px;
+                font-size: 20px;
+            }
         }
     </style>
     
     <style>
+        /* Import Great Vibes font for "Merry Christmas" */
+        @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
     </style>
 
@@ -142,13 +212,20 @@
     <div id="canvas-container"></div>
 
     <div id="ui-layer">
+        <!-- Toggle Button for Touch/Desktop -->
+        <div id="ui-toggle-btn" title="Toggle Controls">⚙</div>
+
         <h1>Merry Christmas</h1>
         
-        <div class="upload-wrapper">
-            <label class="upload-btn">
-                Add Memories
-                <input type="file" id="file-input" multiple accept="image/*">
-            </label>
+        <!-- Added ui-hidden class by default -->
+        <div class="upload-wrapper ui-hidden">
+            <div class="btn-group">
+                <label class="upload-btn">
+                    Add Memories
+                    <input type="file" id="file-input" multiple accept="image/*">
+                </label>
+                <button class="reset-btn" id="reset-btn">Reset</button>
+            </div>
             <div class="hint-text">Pinch to Zoom · Release to Shrink · Wave to Rotate</div>
         </div>
     </div>
@@ -201,22 +278,83 @@
         };
 
         // --- OPTIMIZATION GLOBALS ---
-        // Reusing these objects prevents creating new ones every frame (GC optimization)
         const _tempVec3 = new THREE.Vector3();
         const _tempMat4 = new THREE.Matrix4();
         const _focusPos = new THREE.Vector3(0, 2, 35);
-        const _origin = new THREE.Vector3(0, 0, 0);
 
         let scene, camera, renderer, composer;
         let mainGroup, bgGroup; 
         let clock = new THREE.Clock();
         let particleSystem = []; 
-        let photosList = []; // Optimization: only iterate this for hovering/focus
+        let photosList = []; 
         let photoMeshGroup = new THREE.Group();
         let handLandmarker, video, webcamCanvas, webcamCtx;
         let caneTexture; 
 
+        // --- INDEXED DB SETUP (For Persistence) ---
+        let db;
+        const DB_NAME = 'XmasTreeMemories';
+        const STORE_NAME = 'images';
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = (event) => console.error("DB Error", event);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { autoIncrement: true });
+                    }
+                };
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    resolve(db);
+                };
+            });
+        }
+
+        function saveImageToDB(dataUrl) {
+            if(!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            store.add(dataUrl);
+        }
+
+        function loadImagesFromDB() {
+            if(!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => {
+                const images = request.result;
+                if(images && images.length > 0) {
+                    console.log(`Loading ${images.length} saved memories...`);
+                    images.forEach(imgData => {
+                        new THREE.TextureLoader().load(imgData, (t) => {
+                            t.colorSpace = THREE.SRGBColorSpace;
+                            const aspect = t.image.width / t.image.height;
+                            addPhotoToScene(t, aspect);
+                        });
+                    });
+                }
+            };
+        }
+
+        function clearDB() {
+            if(!db) return;
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const req = store.clear();
+            req.onsuccess = () => {
+                alert("Memories cleared. Refreshing...");
+                location.reload();
+            }
+        }
+
         async function init() {
+            // Init DB first
+            await initDB();
+            
             initThree();
             setupEnvironment(); 
             setupLights();
@@ -228,6 +366,9 @@
             setupPostProcessing();
             setupEvents();
             
+            // Load saved photos
+            loadImagesFromDB();
+
             animate();
 
             const loader = document.getElementById('loader');
@@ -301,7 +442,6 @@
 
         function setupPostProcessing() {
             const renderScene = new RenderPass(scene, camera);
-            // Reduced bloom radius slightly for performance
             const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
             bloomPass.threshold = 0.5;  
             bloomPass.strength = 0.7;   
@@ -433,7 +573,6 @@
                 );
             }
 
-            // Optimized update method to reduce GC
             update(dt, mode, focusTargetMesh) {
                 if (this.type === 'NEBULA') {
                     const time = clock.getElapsedTime();
@@ -445,7 +584,6 @@
                     return; 
                 }
 
-                // --- OPTIMIZED POSITION LERP ---
                 let target;
                 if (mode === 'TREE') {
                     target = this.posTree;
@@ -453,7 +591,6 @@
                     target = this.posScatter;
                 } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
-                        // Use reused globals for matrix calc
                         _tempMat4.copy(mainGroup.matrixWorld).invert();
                         _tempVec3.copy(_focusPos).applyMatrix4(_tempMat4);
                         target = _tempVec3;
@@ -462,16 +599,12 @@
                     }
                 }
 
-                // Lerp position
                 const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 2.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
-                // --- ROTATION LOGIC ---
                 if (mode === 'SCATTER') {
                     if (this.type === 'PHOTO') {
                         this.mesh.lookAt(camera.position);
-
-                        // Flash effect logic moved to updateHoverTarget to save cycles here
                     } else {
                         this.mesh.rotation.x += this.spinSpeed.x * dt;
                         this.mesh.rotation.y += this.spinSpeed.y * dt;
@@ -485,7 +618,6 @@
                     this.mesh.lookAt(camera.position); 
                 }
 
-                // --- SCALE LOGIC ---
                 let s = this.baseScale;
                 if (this.isDust) {
                     s = this.baseScale * (0.8 + 0.4 * Math.sin(clock.elapsedTime * 4 + this.mesh.id));
@@ -501,14 +633,12 @@
                     else s = this.baseScale * 0.8; 
                 }
                 
-                // Optimized lerp for scalar
                 const cur = this.mesh.scale.x;
                 const next = cur + (s - cur) * 4 * dt;
                 this.mesh.scale.setScalar(next);
             }
         }
 
-        // --- CREATION ---
         function createParticles() {
             const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32); 
             const boxGeo = new THREE.BoxGeometry(0.55, 0.55, 0.55); 
@@ -534,16 +664,16 @@
                 emissiveIntensity: 0.2
             });
 
+            // UPDATED: Metallic Christmas Red
             const redMat = new THREE.MeshPhysicalMaterial({
                 color: CONFIG.colors.accentRed,
-                metalness: 0.2,       
-                roughness: 0.25,      
-                sheen: 1.5,      
-                sheenRoughness: 0.4,  
-                sheenColor: 0xffaaaa, 
-                clearcoat: 0.1,       
-                emissive: 0x660000,   
-                emissiveIntensity: 0.5 
+                metalness: 0.9,       // High metallic
+                roughness: 0.15,      // Very smooth
+                clearcoat: 1.0,       // Shiny coating
+                clearcoatRoughness: 0.1,
+                emissive: 0x220000,   // Low emissive to sustain color
+                emissiveIntensity: 0.1,
+                envMapIntensity: 2.5  // Strong reflections
             });
             
             const candyMat = new THREE.MeshStandardMaterial({ 
@@ -556,19 +686,19 @@
                 const rand = Math.random();
                 let mesh, type;
                 
-                if (rand < 0.60) { // 60% Green 
+                if (rand < 0.60) { 
                     mesh = new THREE.Mesh(boxGeo, greenMat);
                     type = 'BOX';
-                } else if (rand < 0.70) { // 10% Red 
+                } else if (rand < 0.70) { 
                     mesh = new THREE.Mesh(sphereGeo, redMat);
                     type = 'RED';
-                } else if (rand < 0.90) { // 20% Gold Sphere 
+                } else if (rand < 0.90) { 
                     mesh = new THREE.Mesh(sphereGeo, goldMat);
                     type = 'GOLD_SPHERE';
-                } else if (rand < 0.96) { // 6% Gold Box 
+                } else if (rand < 0.96) { 
                     mesh = new THREE.Mesh(boxGeo, goldMat);
                     type = 'GOLD_BOX';
-                } else { // 4% Candy
+                } else { 
                     mesh = new THREE.Mesh(candyGeo, candyMat);
                     type = 'CANE';
                 }
@@ -583,7 +713,6 @@
                 particleSystem.push(new Particle(mesh, type, false));
             }
 
-            // Create 3D Star
             const starShape = new THREE.Shape();
             const points = 5;
             const outerRadius = 1.4;
@@ -604,7 +733,6 @@
             });
             starGeo.center(); 
 
-            // Updated Star Material
             const starMat = new THREE.MeshStandardMaterial({
                 color: CONFIG.colors.champagneGold, 
                 emissive: CONFIG.colors.starGlow, 
@@ -619,7 +747,6 @@
             starLight.position.set(0, 0, 0.5);
             star.add(starLight);
 
-            // Glow Sprite
             const glowTex = createGlowTexture();
             const glowMat = new THREE.SpriteMaterial({ 
                 map: glowTex, 
@@ -736,7 +863,7 @@
             photoMeshGroup.add(group);
             const p = new Particle(group, 'PHOTO', false);
             particleSystem.push(p);
-            photosList.push(p); // Add to optimization list
+            photosList.push(p); 
         }
         
         function handleImageUpload(e) {
@@ -745,7 +872,11 @@
             Array.from(files).forEach(f => {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    new THREE.TextureLoader().load(ev.target.result, (t) => {
+                    const result = ev.target.result;
+                    // Save to DB
+                    saveImageToDB(result);
+                    
+                    new THREE.TextureLoader().load(result, (t) => {
                         t.colorSpace = THREE.SRGBColorSpace;
                         const aspect = t.image.width / t.image.height;
                         addPhotoToScene(t, aspect);
@@ -821,34 +952,21 @@
                 tips.forEach(t => avgDist += Math.hypot(t.x - wrist.x, t.y - wrist.y));
                 avgDist /= 4;
 
-                // LOGIC:
-                // 1. Pinch (< 0.05) -> Focus on HOVER target (Zoom)
-                // 2. Open Pinch (> 0.08) -> Release Focus (Shrink)
-                // 3. Fist -> Tree (Gather)
-                // 4. Open Hand -> Scatter
-                
                 if (pinchDist < 0.05) {
-                    // Pinching
                     if (STATE.mode === 'SCATTER' && STATE.hoverTarget) {
                         STATE.mode = 'FOCUS';
                         STATE.focusTarget = STATE.hoverTarget;
                     } 
-                    // Note: If already FOCUS, do nothing (stay zoomed)
                 } else if (pinchDist > 0.08) {
-                    // Released pinch
                     if (STATE.mode === 'FOCUS') {
                          STATE.mode = 'SCATTER';
                          STATE.focusTarget = null;
                     }
-                    
-                    // Standard State Switching (only if not focusing)
                     if (STATE.mode !== 'FOCUS') {
                          if (avgDist < 0.25) {
-                            // Fist -> Tree
                             STATE.mode = 'TREE';
                             STATE.focusTarget = null;
                         } else if (avgDist > 0.4) {
-                            // Open Hand -> Scatter
                             STATE.mode = 'SCATTER';
                             STATE.focusTarget = null;
                         }
@@ -859,17 +977,12 @@
             }
         }
 
-        // Optimized Hover Target Calculation
-        // Only iterates photos list instead of all particles
         function updateHoverTarget() {
-            // Only calc hover in SCATTER mode to save CPU
             if (STATE.mode !== 'SCATTER') {
                 if (STATE.mode !== 'FOCUS') STATE.hoverTarget = null;
-                // Reset emissive for all photos if not in scatter
                 for(let i=0; i<photosList.length; i++) {
                     const frame = photosList[i].mesh.children[0];
                     if(frame.material && frame.material.emissive) {
-                        // Keep highlight if focused
                          if (STATE.mode === 'FOCUS' && photosList[i].mesh === STATE.focusTarget) {
                              frame.material.emissive.setHex(0xffd700);
                              frame.material.emissiveIntensity = 1.0;
@@ -888,7 +1001,7 @@
 
             for(let i=0; i<photosList.length; i++) {
                 const p = photosList[i];
-                p.mesh.getWorldPosition(_tempVec3); // Use global temp vec
+                p.mesh.getWorldPosition(_tempVec3);
                 const dist = _tempVec3.distanceTo(cameraPos);
                 
                 if (dist < bestDist) {
@@ -899,7 +1012,6 @@
             
             STATE.hoverTarget = bestCandidate;
 
-            // Apply Emissive Effect efficiently
             const time = clock.elapsedTime;
             const pulse = Math.sin(time * 10) * 0.5 + 0.5;
 
@@ -933,6 +1045,13 @@
             });
 
             document.getElementById('file-input').addEventListener('change', handleImageUpload);
+            document.getElementById('reset-btn').addEventListener('click', clearDB);
+            
+            // Toggle Button Logic
+            document.getElementById('ui-toggle-btn').addEventListener('click', () => {
+                const controls = document.querySelector('.upload-wrapper');
+                if(controls) controls.classList.toggle('ui-hidden');
+            });
             
             window.addEventListener('keydown', (e) => {
                 if (e.key.toLowerCase() === 'h') {
@@ -969,10 +1088,8 @@
             requestAnimationFrame(animate);
             const dt = clock.getDelta();
 
-            // Update hover logic every frame
             updateHoverTarget();
 
-            // Rotation Logic
             if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
                 if (STATE.hand.lastX !== null) {
                     const deltaX = STATE.hand.x - STATE.hand.lastX;
